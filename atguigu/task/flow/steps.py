@@ -39,10 +39,24 @@ class FlowStep:
             'next': cls._build_links(flow_step_data['next'])
         }
 
-    # todo
     @classmethod
     def _build_links(cls, next_data: str | list[dict]) -> list[FlowStepLink]:
-        pass
+        # 判断如果 next_data类型是字符串，表示无条件跳转
+        if isinstance(next_data, str):
+            return [StaticLink(target=next_data)]
+        else: # next_data列表形式，表示有条件跳转
+            link_list:list[FlowStepLink] = []
+            # 把next_data列表遍历
+            for link_data in next_data:                # 判断if  then
+                if 'if' in link_data:
+                    link_list.append(ConditionalLink(
+                        condition=link_data['if'],
+                        target=link_data['then']
+                    ))
+                else: # else分支
+                    link_list.append(FallbackLink(
+                          target=link_data['else']))
+            return link_list
 
 @dataclass
 class StartFlowStep(FlowStep):

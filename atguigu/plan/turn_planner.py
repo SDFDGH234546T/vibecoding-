@@ -1,0 +1,75 @@
+import json
+from dataclasses import asdict
+
+from langchain_core.output_parsers import JsonOutputParser
+from langchain_core.prompts import PromptTemplate
+
+from atguigu.domain.message import UserMessage
+from atguigu.domain.state import DialogueState, Turn
+from atguigu.prompts.history_builder import HistoryBuilder
+from atguigu.prompts.loader import load_prompt
+from atguigu.prompts.models import TurnPlan
+from atguigu.task.flow.models import FlowCatalog, Flow
+from atguigu.utils.llm import llm
+
+"""
+这个模块作用：根据用户文本消息调用llm进行意图识别
+"""
+class TurnPlanner:
+
+    async def plan(self,state:DialogueState,
+                   user_message:UserMessage,
+                   flow_catalog:FlowCatalog)->TurnPlan:
+        # 1 创建提示词模版
+        prompt_text = load_prompt("turn_plan")
+        prompt = PromptTemplate.from_template(
+            prompt_text,
+            template_format="jinja2"
+        )
+
+        # 2 创建调用链
+        chain = prompt | llm | JsonOutputParser()
+
+        # 获取user_message
+        user_message = HistoryBuilder.render_user_message(user_message)
+        # 获取conversation_history 历史
+        turns:list[Turn] = state.shared.sessions[-1].turns
+        conversation_history = HistoryBuilder.build(turns)
+
+        # 获取focused_object_json
+        focused_object_json = json.dumps(
+            asdict(state.shared.focused_object)
+            if state.shared.focused_object else None,
+        )
+
+        # 获取所有流程数据 flows_json
+        # FlowCatalog
+        flows:dict[str,Flow] = flow_catalog.flows
+        # 把所有流程里面步骤部分数据去掉
+        # llm只是做意图识别，没有推进步骤，不需要步骤数据，如果传递步骤数据造成llm幻觉
+        # flows_json = [
+        #     {
+        #         "flow_id":flow.id,
+        #         "name":flow.name,
+        #         "description":flow.description
+        #     }
+        #     for flow in flows.values()
+        # ]
+
+        flows_json = [
+            {k:v for k,v in asdict(flow).items()
+               if k != "steps"
+            }
+            for flow in flows.values()
+        ]
+
+        # 3 调用方法执行，方法里面传入提示词需要数据
+        result = await chain.ainvoke(input={
+            "user_message":user_message,
+            "conversation_history":conversation_history,
+            "focused_object_json":focused_object_json,
+            "flows_json":flows_json
+        })
+
+        # 4 把llm返回json结构转换对象
+        return TurnPlan.from_dict(result)
