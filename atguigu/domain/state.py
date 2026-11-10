@@ -42,6 +42,16 @@ class SharedState:
     # 多个会话数据
     sessions: list[Session] = field(default_factory=list)
 
+    # 创建session，放到列表
+    def create_session(self):
+        now = time.time()
+        session = Session(
+            session_id=str(uuid.uuid4()),
+            started_at=now,
+            last_activity_at=now,
+        )
+        # 放到sessions: list[Session]
+        self.sessions.append(session)
 
 # 某个任务流程步骤相关数据
 @dataclass
@@ -75,3 +85,9 @@ class DialogueState:
     shared: SharedState=field(default_factory=SharedState)
     # 任务流程特有数据，流程步骤数据
     tasks: TaskState=field(default_factory=TaskState)
+
+    # 清空任务数据
+    def clear_task(self):
+        self.shared.focused_object = None
+        self.tasks.active = None
+        self.tasks.paused.clear()
