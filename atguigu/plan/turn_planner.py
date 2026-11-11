@@ -63,12 +63,16 @@ class TurnPlanner:
             for flow in flows.values()
         ]
 
+        task_state_json = json.dumps(
+            asdict(state.tasks) if state.tasks else None,)
         # 3 调用方法执行，方法里面传入提示词需要数据
         result = await chain.ainvoke(input={
             "user_message":user_message,
             "conversation_history":conversation_history,
             "focused_object_json":focused_object_json,
-            "flows_json":flows_json
+            "flows_json":flows_json,
+            "task_state_json":task_state_json,
+            "knowledge_intents_json":{} # todo 知识检索
         })
 
         # 4 把llm返回json结构转换对象

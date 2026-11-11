@@ -1,13 +1,26 @@
 import time
 import uuid
+from pathlib import Path
 
 from atguigu.domain.message import UserMessage, ProcessResult, BotMessage, MessageType
 from atguigu.domain.state import DialogueState, Turn
+from atguigu.plan.turn_plan_validator import TurnPlanValidator
+from atguigu.plan.turn_planner import TurnPlanner
+from atguigu.prompts.models import TurnPlan, TurnPlanValidationResult
+from atguigu.task.flow.loader import FlowLoader
+from atguigu.task.flow.models import FlowCatalog
 
 """
 这个模块作用：用于处理消息
 """
 class DialogueEngine:
+
+    def __init__(self,turn_planner:TurnPlanner,
+                 turn_plan_validator:TurnPlanValidator):
+        self.turn_planner = turn_planner
+        self.turn_plan_validator = turn_plan_validator
+
+
     async def process_message(self,
                     state:DialogueState,
                               user_message:UserMessage)->ProcessResult:
@@ -39,7 +52,8 @@ class DialogueEngine:
         # 2 判断消息类型
         ## 文本类型消息
         if user_message.type==MessageType.TEXT:
-            messages:list[BotMessage] = await self._execute_text_message(state, user_message)
+            messages:list[BotMessage] = \
+                await self._execute_text_message(state, user_message)
         else: # 对象类型消息
             messages:list[BotMessage] = await self._execute_object_message(state, user_message)
 
@@ -85,8 +99,39 @@ class DialogueEngine:
                 current_session.last_activity_at = now
 
 
-    # todo 文本类型消息处理
-    async def _execute_text_message(self, state, user_message):
+    # 文本类型消息处理
+    async def _execute_text_message(self, state, user_message)->list[BotMessage]:
+        # 获取yaml所有流程数据
+        path = Path(__file__).parents[2]/'flow_config'/'user_flows.yml'
+        flow_catalog:FlowCatalog = FlowLoader().load(path)
+        # 1 对文本消息意图识别
+        turn_plan:TurnPlan= await self.turn_planner.plan(
+            state=state,
+            user_message=user_message,
+            flow_catalog=flow_catalog )
+
+        # 2 对意图识别结果校验
+        validation:TurnPlanValidationResult = (
+            self.turn_plan_validator.validate(turn_plan=turn_plan,
+                                          state=state,
+                                          flow_catelog=flow_catalog))
+
+        ## todo
+        # 对校验结果判定，失败
+        if not validation.valid:
+            # 执行澄清回复组件
+            pass
+
+        # 成功，根据识别方向执行不同处理器
+        if turn_plan.task: # 任务流程方向
+            pass
+
+        if turn_plan.knowledge: # 知识检索方向
+            pass
+
+        else: # 闲聊方向
+            pass
+
         pass
 
     # todo 对象类型消息处理

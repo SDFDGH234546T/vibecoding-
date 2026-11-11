@@ -1,9 +1,10 @@
 from dataclasses import dataclass, field
 from enum import Enum
 
-from atguigu.task.command.models import Command
+from atguigu.plan.command import Command
 
-# plan / models.py
+
+# plan / command.py
 @dataclass
 class TaskTurnPlan:
     commands: list[Command] = field(default_factory=list)
