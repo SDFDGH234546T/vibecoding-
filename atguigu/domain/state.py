@@ -2,6 +2,8 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from atguigu.domain.message import UserMessage, BotMessage
+from atguigu.lifecycle.models import TaskEvent, TaskSwitched, TaskRef, TaskStarted, TaskResumed
+
 
 # 一轮对话，一个问题对应一个或者多个回答
 @dataclass
@@ -67,6 +69,12 @@ class TaskInstance:
     # 槽位数据字典  {order_number : a10098765}
     slots: dict= field(default_factory=dict)
 
+    def get_task_ref(self)->TaskRef:
+        return TaskRef(
+            task_id=self.task_id,
+            flow_id=self.flow_id,
+        )
+
 
 # 任务流程特有数据，流程步骤数据
 @dataclass
@@ -75,6 +83,67 @@ class TaskState:
     active: TaskInstance | None = None
     # 中断（暂停）的任务
     paused: list[TaskInstance] = field(default_factory=list)
+
+    # {"command": "start_flow", "flow": "<flow_id>"},
+    ## 判断当前是否有active，如果没有直接放
+    ## 如果有，把当前任务暂停，把新任务放到active里面
+    def start_task(self, task)->TaskEvent:
+        ## 当前有active
+        if self.active:
+            previous = self.active.get_task_ref()
+            # 把当前活跃任务暂停
+            self.paused.append(self.active)
+            # 把新任务做为活跃
+            self.active = task
+            current = self.active.get_task_ref()
+            return TaskSwitched(
+                # 暂停任务
+                previous=previous,
+                # 当前活跃任务
+                current=current
+            )
+        else: # 没有活跃任务
+            self.active = task
+            return TaskStarted(
+                task=self.active.get_task_ref(),
+            )
+
+    # 恢复任务
+    def resume_task(self,task_id)->TaskEvent:
+        target_task_ref = None
+        target_task = None
+        # 1 从中断列表获取要恢复任务
+        for index,task in enumerate(self.paused):
+            if task.task_id == task_id:
+                target_task_ref = task.get_task_ref()
+                target_task = self.paused.pop(index)
+                break
+
+        # 2 判断恢复任务是否找到
+        if target_task is None:
+            raise Exception(f"Task not found in paused tasks")
+
+        # 3 如果找到恢复任务
+        ## 判断当前是否活跃任务
+        if self.active:
+            previous = self.active.get_task_ref()
+
+            self.paused.append(self.active)
+            self.active = target_task
+
+            return TaskSwitched(
+                previous=previous,
+                current=target_task_ref
+            )
+        else:
+            self.active = target_task
+            return TaskResumed(
+                task=self.active.get_task_ref(),
+            )
+
+    # todo 取消
+    def cancel_task(self):
+        pass
 
 
 @dataclass
