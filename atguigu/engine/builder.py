@@ -1,0 +1,42 @@
+"""
+维护engine层注入关系
+"""
+from pathlib import Path
+
+from atguigu.engine.dialogue_engine import DialogueEngine
+from atguigu.plan.turn_plan_validator import TurnPlanValidator
+from atguigu.plan.turn_planner import TurnPlanner
+from atguigu.task.command.command_processor import CommandProcessor
+from atguigu.task.flow.loader import FlowLoader
+from atguigu.task.flow.models import FlowCatalog
+from atguigu.task.task_handler import TaskHandler
+from atguigu.task.tasklifecycle.task_lifecycle import TaskLifecycleResponder
+
+
+def build_engine()->DialogueEngine:
+
+    # 创建FlowCatalog对象
+    flow_path = Path(__file__).parents[2]/'flow_config'/'user_flows.yml'
+    flow_catalog:FlowCatalog =FlowLoader().load(flow_path)
+
+    # 意图识别对象
+    turn_planner = TurnPlanner()
+    # 校验
+    turn_plan_validator = TurnPlanValidator()
+
+    # 任务流程
+    command_processor = CommandProcessor()
+    task_lifycycle = TaskLifecycleResponder(
+        flow_catalog=flow_catalog,
+    )
+    task_handler = TaskHandler(
+        command_processor=command_processor,
+        task_lifecycle=task_lifycycle,
+        flow_catalog=flow_catalog,
+    )
+
+    return DialogueEngine(
+        turn_planner=turn_planner,
+        turn_plan_validator=turn_plan_validator,
+        task_handler=task_handler,
+    )

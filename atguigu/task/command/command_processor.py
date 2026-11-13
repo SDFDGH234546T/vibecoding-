@@ -79,6 +79,9 @@ class CommandProcessor:
             return event
 
         # {"command": "cancel_task", "task_id": "<task_id>"}
+        # 根据task_id找到对应任务，把取消
+        ## 从当前活跃任务 或者 中断列表找
         if isinstance(command, CancelTaskCommand):
-            event: TaskEvent = state.tasks.cancel_task()
+            task_id = command.task_id
+            event: TaskEvent = state.tasks.cancel_task(task_id)
             return event

@@ -2,7 +2,7 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from atguigu.domain.message import UserMessage, BotMessage
-from atguigu.lifecycle.models import TaskEvent, TaskSwitched, TaskRef, TaskStarted, TaskResumed
+from atguigu.lifecycle.models import TaskEvent, TaskSwitched, TaskRef, TaskStarted, TaskResumed, TaskCanceled
 
 
 # 一轮对话，一个问题对应一个或者多个回答
@@ -141,9 +141,29 @@ class TaskState:
                 task=self.active.get_task_ref(),
             )
 
-    # todo 取消
-    def cancel_task(self):
-        pass
+    # 取消任务
+    def cancel_task(self,task_id)->TaskEvent:
+        # 1 判断当前活跃任务是否要取消任务
+        if self.active is not None and self.active.task_id == task_id:
+            target_task = self.active.get_task_ref()
+            # 取消
+            self.active = None
+            return TaskCanceled(
+                task=target_task
+            )
+        # 2 到中断列表找到取消任务
+        else:
+            for paused_task in self.paused:
+                # 中断列表任务id和传入任务id相同
+                if paused_task.task_id == task_id:
+                    target_task = paused_task.get_task_ref()
+                    # 找到取消任务
+                    self.paused.remove(paused_task)
+                    return TaskCanceled(
+                        task=target_task
+                    )
+
+            raise Exception(f"Task not found in paused tasks")
 
 
 @dataclass

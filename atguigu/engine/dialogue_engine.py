@@ -9,6 +9,7 @@ from atguigu.plan.turn_planner import TurnPlanner
 from atguigu.prompts.models import TurnPlan, TurnPlanValidationResult
 from atguigu.task.flow.loader import FlowLoader
 from atguigu.task.flow.models import FlowCatalog
+from atguigu.task.task_handler import TaskHandler
 
 """
 这个模块作用：用于处理消息
@@ -16,9 +17,11 @@ from atguigu.task.flow.models import FlowCatalog
 class DialogueEngine:
 
     def __init__(self,turn_planner:TurnPlanner,
-                 turn_plan_validator:TurnPlanValidator):
+                 turn_plan_validator:TurnPlanValidator,
+                 task_handler:TaskHandler):
         self.turn_planner = turn_planner
         self.turn_plan_validator = turn_plan_validator
+        self.task_handler = task_handler
 
 
     async def process_message(self,
@@ -124,7 +127,12 @@ class DialogueEngine:
 
         # 成功，根据识别方向执行不同处理器
         if turn_plan.task: # 任务流程方向
-            pass
+            messages:list[BotMessage]= await self.task_handler.handle(
+                state=state,
+                user_message=user_message,
+                commands=turn_plan.task.commands
+            )
+            return messages
 
         if turn_plan.knowledge: # 知识检索方向
             pass

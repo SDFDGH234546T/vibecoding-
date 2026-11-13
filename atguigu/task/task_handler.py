@@ -1,0 +1,49 @@
+"""
+这个模块作用：任务流程对外入口
+调用TaskHandler三个组件
+commandProcessor：更新state状态
+tasklifecycle：生成中文提示
+flowExecutor：按照步骤推进
+把最终结果合并，返回用户
+"""
+from atguigu.domain.message import UserMessage, BotMessage
+from atguigu.domain.state import DialogueState
+from atguigu.lifecycle.models import TaskRef, TaskEvent
+from atguigu.plan.command import Command
+from atguigu.task.command.command_processor import CommandProcessor
+from atguigu.task.flow.models import FlowCatalog
+from atguigu.task.tasklifecycle.task_lifecycle import TaskLifecycleResponder
+
+
+class TaskHandler:
+    # 注入需要对象
+    def __init__(self, command_processor:CommandProcessor,
+                 task_lifecycle:TaskLifecycleResponder,
+                 flow_catalog:FlowCatalog):
+        self.command_processor = command_processor
+        self.task_lifecycle = task_lifecycle
+        self.flow_catalog = flow_catalog
+
+    # 入口方法
+    async def handle(self, commands:list[Command],
+                      state:DialogueState,
+                     user_message:UserMessage)->list[BotMessage]:
+        # 1 调用commandProcessor更新state状态数据
+        events:list[TaskEvent] = \
+            await self.command_processor.process_command(
+                commands=commands,
+                state=state,
+                flow_catelog=self.flow_catalog
+            )
+
+        # 2 根据commandProcessor执行返回结果调用tasklifecycle
+        ## 根据不同状态对象生成不同中文提示
+        messages:list[BotMessage] = await self.task_lifecycle.respond(
+            events=events,
+        )
+
+        # todo
+        #  3 调用FlowExecutor组件推进步骤实现
+        # FlowExecutor组件执行之后返回结果 messages:list[BotMessage]
+        # 和第二步结果合并  messages.extend()
+        return messages
