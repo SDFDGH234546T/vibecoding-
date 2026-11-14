@@ -1,12 +1,16 @@
 import time
 import uuid
+from dataclasses import asdict
 from pathlib import Path
 
+from atguigu.chitchat.chit_chat import ChitChatHandler
+from atguigu.clarify.clarify_response import ClarifyResponse
 from atguigu.domain.message import UserMessage, ProcessResult, BotMessage, MessageType
-from atguigu.domain.state import DialogueState, Turn
+from atguigu.domain.state import DialogueState, Turn, FocusedObject
+from atguigu.plan.command import SetSlotsCommand
 from atguigu.plan.turn_plan_validator import TurnPlanValidator
 from atguigu.plan.turn_planner import TurnPlanner
-from atguigu.prompts.models import TurnPlan, TurnPlanValidationResult
+from atguigu.prompts.models import TurnPlan, TurnPlanValidationResult, ClarifyReason
 from atguigu.task.flow.loader import FlowLoader
 from atguigu.task.flow.models import FlowCatalog
 from atguigu.task.task_handler import TaskHandler
@@ -18,11 +22,14 @@ class DialogueEngine:
 
     def __init__(self,turn_planner:TurnPlanner,
                  turn_plan_validator:TurnPlanValidator,
-                 task_handler:TaskHandler):
+                 task_handler:TaskHandler,
+                 chit_chat:ChitChatHandler,
+                 clarify_response:ClarifyResponse):
         self.turn_planner = turn_planner
         self.turn_plan_validator = turn_plan_validator
         self.task_handler = task_handler
-
+        self.chit_chat = chit_chat
+        self.clarify_response = clarify_response
 
     async def process_message(self,
                     state:DialogueState,
@@ -57,8 +64,12 @@ class DialogueEngine:
         if user_message.type==MessageType.TEXT:
             messages:list[BotMessage] = \
                 await self._execute_text_message(state, user_message)
+
         else: # 对象类型消息
-            messages:list[BotMessage] = await self._execute_object_message(state, user_message)
+            messages:list[BotMessage] = await self._execute_object_message(
+                state=state,
+                user_message=user_message
+            )
 
         ## 3 提交本轮对象
         turn = Turn(
@@ -119,11 +130,14 @@ class DialogueEngine:
                                           state=state,
                                           flow_catelog=flow_catalog))
 
-        ## todo
         # 对校验结果判定，失败
         if not validation.valid:
             # 执行澄清回复组件
-            pass
+            return await self.clarify_response.response(
+                reason=validation.reason,
+                state=state,
+                user_message=user_message,
+            )
 
         # 成功，根据识别方向执行不同处理器
         if turn_plan.task: # 任务流程方向
@@ -138,10 +152,46 @@ class DialogueEngine:
             pass
 
         else: # 闲聊方向
-            pass
+            return await self.chit_chat.chit_chat(
+                state=state,
+                user_message=user_message,
+            )
 
-        pass
+    # 对象类型消息处理
+    async def _execute_object_message(self, state,
+                                      user_message:UserMessage)->list[BotMessage]:
+        # 1 把对象类型消息封装state里面focused_object里面
+        state.shared.focused_object = FocusedObject(
+            **asdict(user_message.object)
+        )
 
-    # todo 对象类型消息处理
-    async def _execute_object_message(self, state, user_message):
-        pass
+        # 2 判断当前对象类型消息是否可以匹配任务槽位数据
+        if self._is_can_fill_slots(state): # 可以匹配
+
+            if user_message.object.type=='order':
+                slots={'order_number':user_message.object.id}
+            else:
+                slots={'product_id':user_message.object.id}
+            # 创建commands
+            # # | `set_slots`   | `{"command": "set_slots", "slots": {"<slot_name>": "<value>"}}`
+            command = SetSlotsCommand(
+                command="set_slots",
+                slots=slots
+            )
+
+            # 执行任务流程处理器
+            return await self.task_handler.handle(
+                commands=[command],
+                state=state,
+                user_message=user_message,
+            )
+        else:  # 没有匹配
+            return await self.clarify_response.response(
+                reason=ClarifyReason.OBJECT_REQUIRES_INTENT,
+                state=state,
+                user_message=user_message,
+            )
+
+    # todo 判断当前对象类型消息是否可以匹配任务槽位数据
+    def _is_can_fill_slots(self, state)->bool:
+        return True

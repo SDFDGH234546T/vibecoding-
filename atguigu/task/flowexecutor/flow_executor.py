@@ -76,7 +76,8 @@ class FlowExecutor:
                 # 调用方法，返回bool，true表示有槽位数据推进到下一步
                 #                  false表示没有槽位数据，给用户返回提示信息
                 is_collect:bool = await self._get_collect_data(
-                         step,state,bot_messages)
+                         step=step, state=state, user_message=user_message,
+                         bot_messages=bot_messages)
                 if is_collect: # true 有槽位数据
                     # 推进到下一步
                     self._run_next_step(step,state)
