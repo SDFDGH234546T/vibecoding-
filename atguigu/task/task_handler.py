@@ -12,6 +12,7 @@ from atguigu.lifecycle.models import TaskRef, TaskEvent
 from atguigu.plan.command import Command
 from atguigu.task.command.command_processor import CommandProcessor
 from atguigu.task.flow.models import FlowCatalog
+from atguigu.task.flowexecutor.flow_executor import FlowExecutor
 from atguigu.task.tasklifecycle.task_lifecycle import TaskLifecycleResponder
 
 
@@ -19,10 +20,12 @@ class TaskHandler:
     # 注入需要对象
     def __init__(self, command_processor:CommandProcessor,
                  task_lifecycle:TaskLifecycleResponder,
-                 flow_catalog:FlowCatalog):
+                 flow_catalog:FlowCatalog,
+                 flow_executor: FlowExecutor,):
         self.command_processor = command_processor
         self.task_lifecycle = task_lifecycle
         self.flow_catalog = flow_catalog
+        self.flow_executor = flow_executor
 
     # 入口方法
     async def handle(self, commands:list[Command],
@@ -42,8 +45,13 @@ class TaskHandler:
             events=events,
         )
 
-        # todo
         #  3 调用FlowExecutor组件推进步骤实现
-        # FlowExecutor组件执行之后返回结果 messages:list[BotMessage]
-        # 和第二步结果合并  messages.extend()
+        bot_messages:list[BotMessage] = await self.flow_executor.executor(
+            state=state,
+            user_message=user_message,
+            flow_catalog=self.flow_catalog,
+        )
+
+        # 合并前两个阶段产生的消息。
+        messages.extend(bot_messages)
         return messages

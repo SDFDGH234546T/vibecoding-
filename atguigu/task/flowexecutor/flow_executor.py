@@ -5,6 +5,8 @@ from sqlalchemy.util import await_only
 
 from atguigu.domain.message import BotMessage, UserMessage
 from atguigu.domain.state import DialogueState
+from atguigu.task.action.action_runner import ActionRunner
+from atguigu.task.action.base import ActionCall, ActionResult
 from atguigu.task.flow.links import FlowStepLink, ConditionalLink, FallbackLink
 from atguigu.task.flow.models import FlowCatalog, Flow
 from atguigu.task.flow.steps import FlowStep, StartFlowStep, ResponseFlowStep, CollectSlotStep, ActionFlowStep, \
@@ -14,8 +16,10 @@ from atguigu.task.response.response_render import ResponseRender
 
 class FlowExecutor:
 
-    def __init__(self,response_render:ResponseRender):
+    def __init__(self,response_render:ResponseRender,
+                  action_runner:ActionRunner):
         self.response_render = response_render
+        self.action_runner = action_runner
 
     async def executor(self,state:DialogueState,
                        user_message:UserMessage,
@@ -84,9 +88,21 @@ class FlowExecutor:
             action步骤：执行具体业务方法，调用中台接口方法得到结果
             使用技术 httpx
             """
-            # todo 后续完善
             if isinstance(step,ActionFlowStep):
-                # step.action
+                #获取yaml文件action属性值，封装ActionCall对象
+                action_name = step.action
+                action_call = ActionCall(action_name=action_name)
+                # 调用action_runner方法
+                action_result:ActionResult = await self.action_runner.run(
+                    action_call=action_call,
+                    state=state,
+                )
+                # 把action_result里面字典放到slots槽位里面
+                # 为了下一步做数据渲染使用
+                state.tasks.active.slots.update(
+                    action_result.slots_update
+                )
+                # 推进到下一步
                 self._run_next_step(step,state)
                 continue
 
@@ -141,7 +157,7 @@ class FlowExecutor:
         # 2 如果state的active获取不到，从对象类型消息获取
         if not slot_value:
             # 从对象类型消息获取,如果获取到放到state的active里面
-            self.get_slot_data_from_object_message(step.slot_name)
+            self.get_slot_data_from_object_message(step,state)
 
         # 3 如果两个地方都没有获取到，更新bot_messages添加提示信息，返回false
         slot_value = state.tasks.active.slots.get(step.slot_name)
@@ -158,7 +174,28 @@ class FlowExecutor:
         else:
             return True
 
-    # todo 从对象类型消息获取,如果获取到放到state的active里面
-    def get_slot_data_from_object_message(self, slot_name):
-        pass
+    # 从对象类型消息获取,如果获取到放到state的active里面
+    def get_slot_data_from_object_message(self, step, state):
+        # 约定，发送对象类型消息，这个消息首先放到state里面FocusedObject
+        if not state.shared.focused_object:
+            return
+
+        # 判断，因为我们项目当前对象类型消息只有两种
+        # type=order  对应槽位 order_number
+        if (step.slot_name=='order_number'
+             and state.shared.focused_object.type=='order'):
+            order_number = state.shared.focused_object.id
+            # 放到state的active里面
+            state.tasks.active.slots.update(
+                            {step.slot_name:order_number})
+            return
+
+        # type=product 对应槽位 product_id
+        if (step.slot_name=='product_id'
+             and state.shared.focused_object.type=='product'):
+            order_number = state.shared.focused_object.id
+            # 放到state的active里面
+            state.tasks.active.slots.update(
+                            {step.slot_name:order_number})
+            return
 
