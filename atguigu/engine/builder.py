@@ -10,7 +10,7 @@ from atguigu.engine.dialogue_engine import DialogueEngine
 from atguigu.plan.turn_plan_validator import TurnPlanValidator
 from atguigu.plan.turn_planner import TurnPlanner
 from atguigu.task.action.action_runner import ActionRunner
-from atguigu.task.action.builder import register_action
+from atguigu.task.action.builder import register_action, register_custom_action
 from atguigu.task.action.registry import ActionRegistry
 from atguigu.task.command.command_processor import CommandProcessor
 from atguigu.task.flow.loader import FlowLoader
@@ -41,7 +41,9 @@ def build_engine()->DialogueEngine:
     response_render = ResponseRender()
     action_registry = ActionRegistry()
     # 调用方法，把所有action注册
-    register_action(action_registry=action_registry,)
+    # register_action(action_registry=action_registry,)
+    register_custom_action(action_registry=action_registry,)
+
     action_runner = ActionRunner(action_registry=action_registry,)
 
     flow_executor = FlowExecutor(

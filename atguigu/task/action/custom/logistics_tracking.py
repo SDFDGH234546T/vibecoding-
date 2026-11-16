@@ -23,7 +23,8 @@ class LogisticsTrackingAction(Action):
         response = await httpx_client.http_client.get(url)
 
         # 把远程调用返回数据封装到ActionResult对象里面
-        data = response.json().get("data","未知")
+        data = response.json().get("data", {})
+
         return ActionResult(
             slots_update={
                 "logistics_company": data.get("logistics_company","未知"),

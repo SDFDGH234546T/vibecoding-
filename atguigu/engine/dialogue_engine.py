@@ -12,7 +12,8 @@ from atguigu.plan.turn_plan_validator import TurnPlanValidator
 from atguigu.plan.turn_planner import TurnPlanner
 from atguigu.prompts.models import TurnPlan, TurnPlanValidationResult, ClarifyReason
 from atguigu.task.flow.loader import FlowLoader
-from atguigu.task.flow.models import FlowCatalog
+from atguigu.task.flow.models import FlowCatalog, Flow
+from atguigu.task.flow.steps import FlowStep, CollectSlotStep
 from atguigu.task.task_handler import TaskHandler
 
 """
@@ -167,7 +168,6 @@ class DialogueEngine:
 
         # 2 判断当前对象类型消息是否可以匹配任务槽位数据
         if self._is_can_fill_slots(state): # 可以匹配
-
             if user_message.object.type=='order':
                 slots={'order_number':user_message.object.id}
             else:
@@ -192,6 +192,35 @@ class DialogueEngine:
                 user_message=user_message,
             )
 
-    # todo 判断当前对象类型消息是否可以匹配任务槽位数据
-    def _is_can_fill_slots(self, state)->bool:
-        return True
+    # 判断当前对象类型消息是否可以匹配任务槽位数据
+    def _is_can_fill_slots(self, state:DialogueState)->bool:
+        # 1 判断当前正在运行任务,如果没有，返回False
+        active_task = state.tasks.active
+        if not active_task:
+            return False
+
+        # 2 如果有正在运行任务，进行判断
+        # 获取yaml所有流程数据
+        path = Path(__file__).parents[2] / 'flow_config' / 'user_flows.yml'
+        flow_catalog: FlowCatalog = FlowLoader().load(path)
+        # 根据action里面flow_id获取flow对象
+        flow:Flow = flow_catalog.get_flow_by_id(active_task.flow_id)
+        # flow对象方法：根据active里面step_id获取当前step对象
+        step_id = active_task.step_id
+        step:FlowStep = flow.get_step_by_id(step_id)
+        # 当前步骤类型 需要 collect步骤
+        if not isinstance(step,CollectSlotStep):
+            return False
+
+        ## 如果需要订单号，对象类型是order类型，否则product类型
+        ### 获取collect步骤 slot_name槽位名称
+        slot_name = step.slot_name
+        ### 获取对象类型消息 order
+        object_type = state.shared.focused_object.type
+
+        # 匹配判断
+        if slot_name == 'order_number' and object_type=='order':
+            return True
+        if slot_name == 'product_id' and object_type=='product':
+            return True
+        return False
