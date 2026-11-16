@@ -6,6 +6,7 @@ from langchain_core.prompts import PromptTemplate
 
 from atguigu.domain.message import UserMessage
 from atguigu.domain.state import DialogueState, Turn
+from atguigu.knowledge.intents import KNOWLEDGE_INTENTS
 from atguigu.prompts.history_builder import HistoryBuilder
 from atguigu.prompts.loader import load_prompt
 from atguigu.prompts.models import TurnPlan
@@ -65,6 +66,17 @@ class TurnPlanner:
 
         task_state_json = json.dumps(
             asdict(state.tasks) if state.tasks else None,)
+
+        # 构建知识检索范围数据
+        knowledge_intents_json = json.dumps(
+            [   {
+                "id":intent.id,
+                "description":intent.description
+            }
+                for intent in KNOWLEDGE_INTENTS.values()
+            ],ensure_ascii=False
+        )
+
         # 3 调用方法执行，方法里面传入提示词需要数据
         result = await chain.ainvoke(input={
             "user_message":user_message,
@@ -72,7 +84,7 @@ class TurnPlanner:
             "focused_object_json":focused_object_json,
             "flows_json":flows_json,
             "task_state_json":task_state_json,
-            "knowledge_intents_json":{} # todo 知识检索
+            "knowledge_intents_json":knowledge_intents_json
         })
 
         # 4 把llm返回json结构转换对象

@@ -7,6 +7,7 @@ from atguigu.chitchat.chit_chat import ChitChatHandler
 from atguigu.clarify.clarify_response import ClarifyResponse
 from atguigu.domain.message import UserMessage, ProcessResult, BotMessage, MessageType
 from atguigu.domain.state import DialogueState, Turn, FocusedObject
+from atguigu.knowledge.knowledge_handler import KnowledgeHandler
 from atguigu.plan.command import SetSlotsCommand
 from atguigu.plan.turn_plan_validator import TurnPlanValidator
 from atguigu.plan.turn_planner import TurnPlanner
@@ -25,12 +26,14 @@ class DialogueEngine:
                  turn_plan_validator:TurnPlanValidator,
                  task_handler:TaskHandler,
                  chit_chat:ChitChatHandler,
-                 clarify_response:ClarifyResponse):
+                 clarify_response:ClarifyResponse,
+                 knowledge_handler:KnowledgeHandler):
         self.turn_planner = turn_planner
         self.turn_plan_validator = turn_plan_validator
         self.task_handler = task_handler
         self.chit_chat = chit_chat
         self.clarify_response = clarify_response
+        self.knowledge_handler = knowledge_handler
 
     async def process_message(self,
                     state:DialogueState,
@@ -150,7 +153,12 @@ class DialogueEngine:
             return messages
 
         if turn_plan.knowledge: # 知识检索方向
-            pass
+            messages:list[BotMessage] = await self.knowledge_handler.handle(
+                knowledge_intents=turn_plan.knowledge.intents,
+                state=state,
+                user_message=user_message
+            )
+            return messages
 
         else: # 闲聊方向
             return await self.chit_chat.chit_chat(

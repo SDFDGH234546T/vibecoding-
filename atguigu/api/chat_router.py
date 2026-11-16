@@ -7,8 +7,9 @@ from dataclasses import asdict
 from fastapi import APIRouter, Depends
 
 from atguigu.api.dependencies import get_dialogue_service
-from atguigu.api.schemas import ChatRequest, ChatResponse, ChatMessage, ChatObject
+from atguigu.api.schemas import ChatRequest, ChatResponse, ChatMessage, ChatObject, HistoryResponse, HistoryMessage
 from atguigu.domain.message import UserMessage, ProcessResult, MessageType, MessageObject
+from atguigu.domain.state import DialogueState, Session, Turn
 from atguigu.service.dialogue_service import DialogueService
 
 chat_router = APIRouter()
@@ -83,4 +84,52 @@ def _build_response_message(process_result:ProcessResult)->ChatResponse:
             )
             for bot_message in process_result.messages
         ]
+    )
+
+
+# 接口：根据当前用户id查询用户历史会话记录
+@chat_router.get("/api/chat/history")
+async def chat_history(sender_id:str,
+            dialogue_service:DialogueService=Depends(get_dialogue_service)
+                       )->HistoryResponse:
+    # 1 获取当前用户id sender_id
+    # 2 调用service方法根据sender_id查询用户历史消息数据
+    history_data:DialogueState = (
+        await dialogue_service.get_history_data_sender_id(sender_id))
+
+    # 3 把数据查返回history_data:DialogueState，封装HistoryResponse对象
+    ## 从history_data获取所有sessions列表
+    sessions:list[Session] = history_data.shared.sessions
+
+    # 遍历sessions列表得到每个session会话对象
+    messages:list[HistoryMessage] = []
+    for session in sessions:
+        # 每个session对象获取turns列表
+        turns:list[Turn] = session.turns
+        # 遍历turns列表得到每个turn
+        for turn in turns:
+            # 封装用户提问
+            messages.append(HistoryMessage(
+                ## 用户提问 user  客服回复 bot
+                role="user",
+                text=turn.user_message.text,
+                object=ChatObject(
+                    **asdict(turn.user_message.object)
+                ) if turn.user_message.object else None
+            ))
+
+            # 封装客服回复 回复有多个，列表形式
+            messages.extend([
+                    HistoryMessage(
+                        role="bot",
+                        text=bot_message.text,
+                        object=None
+                    )
+                    for bot_message in turn.bot_message
+                ]
+            )
+
+    return HistoryResponse(
+        sender_id=sender_id,
+        messages= messages
     )

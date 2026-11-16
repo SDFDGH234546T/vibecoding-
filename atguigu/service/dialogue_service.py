@@ -32,3 +32,7 @@ class DialogueService:
 
         # 5 返回engine处理结果
         return process_result
+
+    async def get_history_data_sender_id(self, sender_id):
+        state:DialogueState = await self.repository.load_state(sender_id)
+        return state

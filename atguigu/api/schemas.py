@@ -34,5 +34,5 @@ class HistoryMessage(BaseModel):
 
 
 class HistoryResponse(BaseModel):
-    sender_id: str
+    sender_id: str # 用户id
     messages: list[HistoryMessage]
